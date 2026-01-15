@@ -1,0 +1,59 @@
+# Deploy to Google Cloud Run
+#
+# This workflow deploys the application to Cloud Run when pushing to main.
+#
+# Required Configuration (set in repository settings):
+#
+# Secrets:
+#   GCP_SA_KEY - Service account JSON key with Cloud Run Admin + Storage Admin roles
+#
+# Variables:
+#   GCP_PROJECT - Your Google Cloud project ID
+#   GCP_REGION  - Deployment region (e.g., us-central1, europe-west1)
+
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  SERVICE_NAME: social-uploader
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          region: ${{ vars.GCP_REGION }}
+          project_id: ${{ vars.GCP_PROJECT }}
+          source: .
+          flags: |
+            --memory=2Gi
+            --timeout=300
+            --allow-unauthenticated
+
+      - name: Show deployment URL
+        run: |
+          echo "🚀 Deployed to: ${{ steps.deploy.outputs.url }}"
