@@ -55,6 +55,7 @@ class MetaVideoMetadata:
     title: str = ""
     description: str = ""
     caption: str = ""  # Used for Instagram
+    share_to_facebook: bool = True  # Cross-post Instagram Reels to Facebook for combined views
 
 
 async def _upload_video_to_facebook(
@@ -155,7 +156,13 @@ async def _create_instagram_container(
             "media_type": "REELS",  # Use REELS for video content
             "video_url": video_url,
             "caption": metadata.caption or metadata.description or metadata.title,
+            "share_to_feed": "true",  # Share to Instagram feed
         }
+        
+        # Add cross-posting to Facebook if enabled and page_id is available
+        if metadata.share_to_facebook and credentials.page_id:
+            params["collaborate_with_sharing_on_facebook"] = "true"
+            logger.info("Cross-posting to Facebook enabled for combined view counts")
 
         response = await client.post(container_url, data=params)
         response.raise_for_status()
@@ -286,11 +293,15 @@ async def _upload_video_to_instagram(
 
         if "id" in result:
             media_id = result["id"]
-            logger.info(f"✅ Instagram upload successful! Media ID: {media_id}")
+            if metadata.share_to_facebook and credentials.page_id:
+                logger.info(f"✅ Instagram upload successful with Facebook cross-post! Media ID: {media_id}")
+            else:
+                logger.info(f"✅ Instagram upload successful! Media ID: {media_id}")
             return {
                 "platform": "instagram",
                 "status": "success",
                 "media_id": media_id,
+                "cross_posted_to_facebook": metadata.share_to_facebook and credentials.page_id is not None,
             }
         else:
             return {
@@ -345,13 +356,16 @@ async def upload_to_instagram(
 ) -> dict:
     """
     Upload a video to Instagram as a Reel.
+    
+    Supports cross-posting to Facebook for combined view counts.
+    Set metadata.share_to_facebook=True and provide credentials.page_id.
 
     Args:
         video_url: Public URL of the video file (must be accessible by Instagram).
-        credentials: MetaCredentials with access_token and instagram_user_id.
-        metadata: MetaVideoMetadata with caption.
+        credentials: MetaCredentials with access_token, instagram_user_id, and optionally page_id.
+        metadata: MetaVideoMetadata with caption and share_to_facebook flag.
 
     Returns:
-        A dict with upload result.
+        A dict with upload result including cross_posted_to_facebook flag.
     """
     return await _upload_video_to_instagram(video_url, credentials, metadata)

@@ -19,6 +19,7 @@ A **serverless FastAPI** application for uploading videos to multiple social med
 - **📺 YouTube** — OAuth2 Refresh Token flow with resumable uploads
 - **🎵 TikTok** — Browser automation via Playwright
 - **📸 Meta** — Instagram & Facebook via Graph API v24.0
+- **🔗 Cross-Posting** — Instagram Reels auto-share to Facebook for **combined view counts**
 - **☁️ Serverless** — Runs on Google Cloud Run with scale-to-zero
 - **🆓 Zero Cost** — Designed for GCP Free Tier
 - **🚀 CI/CD** — Auto-deploy via GitHub Actions
@@ -167,7 +168,7 @@ All secrets follow the pattern: `{CHANNEL_ID}_{PLATFORM}_{KEY}`
 
 ---
 
-## 🚀 Deployment
+##  Deployment
 
 ### Option 1: GitHub Actions (Recommended)
 
@@ -230,12 +231,15 @@ Upload video to multiple platforms.
   "platforms": ["youtube", "tiktok", "facebook", "instagram"],
   "title": "string",
   "description": "string",
-  "caption": "string"
+  "caption": "string",
+  "share_to_facebook": false
 }
 ```
 
 **Query Parameters:**
 - `dry_run` — If true, validate without uploading (default: `false`)
+
+> **💡 Cross-Posting:** Set `share_to_facebook: true` to cross-post Instagram Reels to Facebook with combined view counts. Facebook will be skipped if also in platforms list.
 
 ---
 

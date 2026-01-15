@@ -87,6 +87,11 @@ class PublishRequest(BaseModel):
         None,
         description="Short caption (used by TikTok, Instagram).",
     )
+    share_to_facebook: bool = Field(
+        False,
+        description="If true, Instagram uploads will cross-post to Facebook for combined view counts. "
+        "When enabled, Facebook in platforms list will be skipped (handled via cross-post).",
+    )
 
 
 class PublishResponse(BaseModel):
@@ -173,6 +178,7 @@ async def upload_to_platform(
     description: Optional[str],
     caption: Optional[str],
     dry_run: bool = False,
+    share_to_facebook: bool = False,
 ) -> dict:
     """
     Upload video to a specific platform.
@@ -189,6 +195,7 @@ async def upload_to_platform(
         description: Video description.
         caption: Short caption (TikTok, Instagram).
         dry_run: If True, validate secrets but don't upload.
+        share_to_facebook: If True, Instagram uploads will cross-post to Facebook.
 
     Returns:
         A dict with the upload result.
@@ -270,17 +277,27 @@ async def upload_to_platform(
         try:
             access_token = get_channel_secret(channel_id, "instagram", "access_token")
             user_id = get_channel_secret(channel_id, "instagram", "user_id")
+            
+            # Try to get Facebook page_id for cross-posting (required if share_to_facebook is True)
+            page_id = None
+            if share_to_facebook:
+                try:
+                    page_id = get_channel_secret(channel_id, "facebook", "page_id")
+                except Exception:
+                    logger.warning(f"share_to_facebook=True but FACEBOOK_PAGE_ID not found for {channel_id}")
 
             if dry_run:
                 return {"platform": platform.value, "status": "validated", "message": "Secrets found"}
 
-            # Build credentials and metadata
+            # Build credentials with optional page_id for cross-posting
             credentials = MetaCredentials(
                 access_token=access_token,
                 instagram_user_id=user_id,
+                page_id=page_id,  # Enables cross-posting if available
             )
             metadata = MetaVideoMetadata(
                 caption=caption or description or title or "",
+                share_to_facebook=share_to_facebook and page_id is not None,
             )
 
             # Instagram uses video_url directly (not local file)
@@ -315,8 +332,21 @@ async def process_publish_request(
         video_filename = parsed_url.path.split("/")[-1] or "video.mp4"
         local_video_path = os.path.join(tmp_dir, video_filename)
 
-        platforms_str = ", ".join(p.value for p in request.platforms)
-        logger.info(f"🚀 [{request.channel_id}] Starting upload to {len(request.platforms)} platforms: {platforms_str}")
+        # Determine which platforms to actually upload to
+        platforms_to_upload = list(request.platforms)
+        
+        # If share_to_facebook is enabled and Instagram is in the list,
+        # skip separate Facebook upload (it will be handled via cross-post)
+        cross_posting_enabled = (
+            request.share_to_facebook 
+            and Platform.INSTAGRAM in request.platforms
+        )
+        if cross_posting_enabled and Platform.FACEBOOK in platforms_to_upload:
+            platforms_to_upload.remove(Platform.FACEBOOK)
+            logger.info(f"🔗 [{request.channel_id}] Cross-posting enabled: Facebook will be handled via Instagram")
+
+        platforms_str = ", ".join(p.value for p in platforms_to_upload)
+        logger.info(f"🚀 [{request.channel_id}] Starting upload to {len(platforms_to_upload)} platforms: {platforms_str}")
 
         if not dry_run:
             try:
@@ -328,7 +358,7 @@ async def process_publish_request(
                 return [{"platform": "all", "status": "error", "message": f"Video download failed: {e}"}]
 
         # Upload to each platform
-        for platform in request.platforms:
+        for platform in platforms_to_upload:
             logger.info(f"📤 [{request.channel_id}] Uploading to {platform.value}...")
             result = await upload_to_platform(
                 platform=platform,
@@ -339,13 +369,18 @@ async def process_publish_request(
                 description=request.description,
                 caption=request.caption,
                 dry_run=dry_run,
+                share_to_facebook=request.share_to_facebook if platform == Platform.INSTAGRAM else False,
             )
             
             # Log result with appropriate emoji
             status = result.get("status", "unknown")
             if status == "success":
                 video_id = result.get("video_id") or result.get("post_id") or result.get("media_id") or ""
-                logger.info(f"✅ [{request.channel_id}] {platform.value}: Success (id: {video_id})")
+                cross_posted = result.get("cross_posted_to_facebook", False)
+                if cross_posted:
+                    logger.info(f"✅ [{request.channel_id}] {platform.value}: Success (id: {video_id}) + Facebook cross-post")
+                else:
+                    logger.info(f"✅ [{request.channel_id}] {platform.value}: Success (id: {video_id})")
             elif status == "validated":
                 logger.info(f"✓ [{request.channel_id}] {platform.value}: Validated")
             else:
