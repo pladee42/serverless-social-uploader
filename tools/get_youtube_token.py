@@ -31,8 +31,67 @@ SCOPES = [
 ]
 
 
+def create_or_update_secret(project_id: str, secret_id: str, secret_value: str) -> None:
+    """Create a new secret or update an existing one in Secret Manager."""
+    from google.cloud import secretmanager
+    from google.api_core import exceptions
+
+    client = secretmanager.SecretManagerServiceClient()
+    parent = f"projects/{project_id}"
+    secret_path = f"{parent}/secrets/{secret_id}"
+
+    # Try to create the secret first
+    try:
+        client.create_secret(
+            request={
+                "parent": parent,
+                "secret_id": secret_id,
+                "secret": {"replication": {"automatic": {}}},
+            }
+        )
+        print(f"   Created secret: {secret_id}")
+    except exceptions.AlreadyExists:
+        print(f"   Secret exists: {secret_id}")
+
+    # Add a new version with the secret value
+    client.add_secret_version(
+        request={
+            "parent": secret_path,
+            "payload": {"data": secret_value.encode("UTF-8")},
+        }
+    )
+    print(f"   ✅ Updated: {secret_id}")
+
+
 def main():
-    """Run the OAuth2 console flow and print the refresh token."""
+    """Run the OAuth2 console flow and optionally save to Secret Manager."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Generate YouTube OAuth2 tokens and optionally save to GCP Secret Manager."
+    )
+    parser.add_argument(
+        "--channel-id",
+        type=str,
+        help="Channel identifier (e.g., 'timeline_b'). Required if using --save.",
+    )
+    parser.add_argument(
+        "--save",
+        action="store_true",
+        help="Automatically save credentials to GCP Secret Manager.",
+    )
+    parser.add_argument(
+        "--project",
+        type=str,
+        help="GCP Project ID. If not provided, uses default from environment.",
+    )
+    args = parser.parse_args()
+
+    # Validate args
+    if args.save and not args.channel_id:
+        print("❌ Error: --channel-id is required when using --save")
+        sys.exit(1)
+
     # Look for client_secret.json in the current directory
     client_secrets_file = Path("client_secret.json")
 
@@ -75,10 +134,6 @@ def main():
     print()
     print("✅ Authorization successful!")
     print()
-    print("=" * 50)
-    print("📋 SAVE THESE VALUES TO GCP SECRET MANAGER:")
-    print("=" * 50)
-    print()
 
     # Load client_id and client_secret from the file
     with open(client_secrets_file) as f:
@@ -92,23 +147,58 @@ def main():
     else:
         client_info = client_config
 
-    print(f"CLIENT_ID:\n{client_info.get('client_id', 'N/A')}")
-    print()
-    print(f"CLIENT_SECRET:\n{client_info.get('client_secret', 'N/A')}")
-    print()
-    print(f"REFRESH_TOKEN:\n{credentials.refresh_token}")
-    print()
-    print("=" * 50)
-    print()
-    print("💡 Next steps:")
-    print("   1. Create secrets in GCP Secret Manager:")
-    print("      - {CHANNEL_ID}_YOUTUBE_CLIENT_ID")
-    print("      - {CHANNEL_ID}_YOUTUBE_CLIENT_SECRET")
-    print("      - {CHANNEL_ID}_YOUTUBE_REFRESH_TOKEN")
-    print()
-    print("   2. Replace {CHANNEL_ID} with your channel identifier")
-    print("      (e.g., TIMELINE_B_YOUTUBE_REFRESH_TOKEN)")
-    print()
+    client_id = client_info.get("client_id", "")
+    client_secret = client_info.get("client_secret", "")
+    refresh_token = credentials.refresh_token
+
+    # If --save flag is set, save to Secret Manager
+    if args.save:
+        print("=" * 50)
+        print("📤 SAVING TO GCP SECRET MANAGER...")
+        print("=" * 50)
+        print()
+
+        # Get project ID
+        project_id = args.project
+        if not project_id:
+            import os
+            project_id = os.environ.get("GCP_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT")
+
+        if not project_id:
+            print("❌ Error: Could not determine GCP Project ID.")
+            print("   Set --project flag or GCP_PROJECT environment variable.")
+            sys.exit(1)
+
+        channel_upper = args.channel_id.upper()
+        print(f"   Project: {project_id}")
+        print(f"   Channel: {args.channel_id}")
+        print()
+
+        create_or_update_secret(project_id, f"{channel_upper}_YOUTUBE_CLIENT_ID", client_id)
+        create_or_update_secret(project_id, f"{channel_upper}_YOUTUBE_CLIENT_SECRET", client_secret)
+        create_or_update_secret(project_id, f"{channel_upper}_YOUTUBE_REFRESH_TOKEN", refresh_token)
+
+        print()
+        print("🎉 All secrets saved successfully!")
+        print()
+
+    else:
+        # Print values for manual copy
+        print("=" * 50)
+        print("📋 SAVE THESE VALUES TO GCP SECRET MANAGER:")
+        print("=" * 50)
+        print()
+        print(f"CLIENT_ID:\n{client_id}")
+        print()
+        print(f"CLIENT_SECRET:\n{client_secret}")
+        print()
+        print(f"REFRESH_TOKEN:\n{refresh_token}")
+        print()
+        print("=" * 50)
+        print()
+        print("💡 TIP: Run with --save --channel-id YOUR_CHANNEL to auto-save!")
+        print("   Example: python tools/get_youtube_token.py --save --channel-id timeline_b")
+        print()
 
 
 if __name__ == "__main__":
