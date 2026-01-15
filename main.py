@@ -315,15 +315,21 @@ async def process_publish_request(
         video_filename = parsed_url.path.split("/")[-1] or "video.mp4"
         local_video_path = os.path.join(tmp_dir, video_filename)
 
+        platforms_str = ", ".join(p.value for p in request.platforms)
+        logger.info(f"🚀 [{request.channel_id}] Starting upload to {len(request.platforms)} platforms: {platforms_str}")
+
         if not dry_run:
             try:
+                logger.info(f"📥 [{request.channel_id}] Downloading video: {video_filename}")
                 await download_from_url(request.video_url, local_video_path)
+                logger.info(f"📥 [{request.channel_id}] Download complete")
             except Exception as e:
-                logger.error(f"Failed to download video: {e}")
+                logger.error(f"❌ [{request.channel_id}] Video download failed: {e}")
                 return [{"platform": "all", "status": "error", "message": f"Video download failed: {e}"}]
 
         # Upload to each platform
         for platform in request.platforms:
+            logger.info(f"📤 [{request.channel_id}] Uploading to {platform.value}...")
             result = await upload_to_platform(
                 platform=platform,
                 channel_id=request.channel_id,
@@ -334,7 +340,23 @@ async def process_publish_request(
                 caption=request.caption,
                 dry_run=dry_run,
             )
+            
+            # Log result with appropriate emoji
+            status = result.get("status", "unknown")
+            if status == "success":
+                video_id = result.get("video_id") or result.get("post_id") or result.get("media_id") or ""
+                logger.info(f"✅ [{request.channel_id}] {platform.value}: Success (id: {video_id})")
+            elif status == "validated":
+                logger.info(f"✓ [{request.channel_id}] {platform.value}: Validated")
+            else:
+                error_msg = result.get("message", "Unknown error")[:100]
+                logger.error(f"❌ [{request.channel_id}] {platform.value}: Failed - {error_msg}")
+            
             results.append(result)
+
+        # Summary
+        success_count = sum(1 for r in results if r.get("status") == "success")
+        logger.info(f"🏁 [{request.channel_id}] Upload complete: {success_count}/{len(results)} succeeded")
 
     return results
 
@@ -391,9 +413,9 @@ async def publish(
 
     The response is immediate; uploads happen asynchronously.
     """
+    platforms_str = ", ".join(p.value for p in request.platforms)
     logger.info(
-        f"Received publish request for channel '{request.channel_id}' "
-        f"to platforms: {[p.value for p in request.platforms]}"
+        f"📨 [{request.channel_id}] Received publish request for {len(request.platforms)} platforms: {platforms_str}"
     )
 
     if dry_run:
