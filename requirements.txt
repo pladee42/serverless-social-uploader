@@ -1,0 +1,19 @@
+# Core Framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.34.0
+
+# Google Cloud
+google-cloud-storage>=2.18.0
+google-cloud-secret-manager>=2.21.0
+google-api-python-client>=2.160.0
+google-auth-oauthlib>=1.2.0
+
+# HTTP Client
+httpx>=0.28.0
+
+# Browser Automation
+playwright>=1.44.0
+
+# Pydantic for models
+pydantic>=2.10.0
+pydantic-settings>=2.7.0
