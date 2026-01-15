@@ -17,7 +17,7 @@ A **serverless FastAPI** application for uploading videos to multiple social med
 - **🎯 Single API Endpoint** — Upload to multiple platforms with one `POST /publish` request
 - **🔐 Config-Driven Secrets** — Dynamic secret resolution using `{CHANNEL_ID}_{PLATFORM}_{KEY}` pattern
 - **📺 YouTube** — OAuth2 Refresh Token flow with resumable uploads
-- **🎵 TikTok** — Browser automation via Playwright
+- **🎵 TikTok (Experimental)** — Playwright automation (Subject to bot detection on Cloud IPs)
 - **📸 Meta** — Instagram & Facebook via Graph API v24.0
 - **🔗 Cross-Posting** — Instagram Reels auto-share to Facebook for **combined view counts**
 - **☁️ Serverless** — Runs on Google Cloud Run with scale-to-zero
@@ -240,6 +240,18 @@ Upload video to multiple platforms.
 - `dry_run` — If true, validate without uploading (default: `false`)
 
 > **💡 Cross-Posting:** Set `share_to_facebook: true` to cross-post Instagram Reels to Facebook with combined view counts. Facebook will be skipped if also in platforms list.
+
+> **Note:** Cross-posting requires both `INSTAGRAM_USER_ID` and `FACEBOOK_PAGE_ID` secrets configured.
+
+---
+
+## ⚠️ Known Limitations
+
+### TikTok Bot Detection
+TikTok employs aggressive bot detection that frequently blocks data center IP addresses (such as Google Cloud Run).
+- **Symptom**: `Navigation timeout` or `Page.goto` errors.
+- **Workaround**: Run the service **locally** on your machine where residential IP reputation is better.
+- **Long-term Solution**: I am evaluating the official [TikTok Content Posting API](https://developers.tiktok.com/products/content-posting-api/), which requires a formal App Review process.
 
 ---
 
