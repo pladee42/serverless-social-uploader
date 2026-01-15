@@ -29,6 +29,12 @@ from platforms.tiktok import (
     TikTokCredentials,
     TikTokVideoMetadata,
 )
+from platforms.meta import (
+    upload_to_facebook,
+    upload_to_instagram,
+    MetaCredentials,
+    MetaVideoMetadata,
+)
 
 # Configure logging
 logging.basicConfig(
@@ -162,6 +168,7 @@ async def upload_to_platform(
     platform: Platform,
     channel_id: str,
     video_path: str,
+    video_url: str,
     title: Optional[str],
     description: Optional[str],
     caption: Optional[str],
@@ -176,7 +183,8 @@ async def upload_to_platform(
     Args:
         platform: The target platform.
         channel_id: The channel identifier for secret lookup.
-        video_path: Local path to the video file.
+        video_path: Local path to the video file (used by YouTube, TikTok).
+        video_url: Public URL of the video file (used by Meta platforms).
         title: Video title (YouTube).
         description: Video description.
         caption: Short caption (TikTok, Instagram).
@@ -242,8 +250,18 @@ async def upload_to_platform(
             if dry_run:
                 return {"platform": platform.value, "status": "validated", "message": "Secrets found"}
 
-            # TODO: Import and call platforms.meta.upload_to_facebook
-            return {"platform": platform.value, "status": "pending", "message": "Facebook uploader not yet implemented"}
+            # Build credentials and metadata
+            credentials = MetaCredentials(
+                access_token=access_token,
+                page_id=page_id,
+            )
+            metadata = MetaVideoMetadata(
+                title=title or "",
+                description=description or caption or "",
+            )
+
+            # Facebook uses video_url directly (not local file)
+            return await upload_to_facebook(video_url, credentials, metadata)
 
         except Exception as e:
             return {"platform": platform.value, "status": "error", "message": str(e)}
@@ -256,8 +274,17 @@ async def upload_to_platform(
             if dry_run:
                 return {"platform": platform.value, "status": "validated", "message": "Secrets found"}
 
-            # TODO: Import and call platforms.meta.upload_to_instagram
-            return {"platform": platform.value, "status": "pending", "message": "Instagram uploader not yet implemented"}
+            # Build credentials and metadata
+            credentials = MetaCredentials(
+                access_token=access_token,
+                instagram_user_id=user_id,
+            )
+            metadata = MetaVideoMetadata(
+                caption=caption or description or title or "",
+            )
+
+            # Instagram uses video_url directly (not local file)
+            return await upload_to_instagram(video_url, credentials, metadata)
 
         except Exception as e:
             return {"platform": platform.value, "status": "error", "message": str(e)}
@@ -301,6 +328,7 @@ async def process_publish_request(
                 platform=platform,
                 channel_id=request.channel_id,
                 video_path=local_video_path if not dry_run else "",
+                video_url=request.video_url,
                 title=request.title,
                 description=request.description,
                 caption=request.caption,
