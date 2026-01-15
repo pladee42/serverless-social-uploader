@@ -19,6 +19,11 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from utils.secrets import get_channel_secret, validate_channel_secrets
+from platforms.youtube import (
+    upload_video as youtube_upload_video,
+    YouTubeCredentials,
+    VideoMetadata as YouTubeVideoMetadata,
+)
 
 # Configure logging
 logging.basicConfig(
@@ -187,8 +192,20 @@ async def upload_to_platform(
             if dry_run:
                 return {"platform": platform.value, "status": "validated", "message": "Secrets found"}
 
-            # TODO: Import and call platforms.youtube.upload_video
-            return {"platform": platform.value, "status": "pending", "message": "YouTube uploader not yet implemented"}
+            # Build credentials and metadata
+            credentials = YouTubeCredentials(
+                client_id=client_id,
+                client_secret=client_secret,
+                refresh_token=refresh_token,
+            )
+            metadata = YouTubeVideoMetadata(
+                title=title or "Untitled Video",
+                description=description or "",
+                privacy_status="private",  # Default to private for safety
+            )
+
+            # Upload to YouTube
+            return await youtube_upload_video(video_path, credentials, metadata)
 
         except Exception as e:
             return {"platform": platform.value, "status": "error", "message": str(e)}
