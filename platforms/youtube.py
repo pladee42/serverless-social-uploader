@@ -58,6 +58,8 @@ class YouTubeCredentials:
             client_id=self.client_id,
             client_secret=self.client_secret,
             scopes=[YOUTUBE_UPLOAD_SCOPE],
+            # Allow using refresh token to automatically refresh access token
+            expiry=None,
         )
 
 
@@ -68,9 +70,10 @@ class VideoMetadata:
     title: str
     description: str = ""
     tags: list[str] | None = None
-    category_id: str = "22"  # "People & Blogs" category
+    category_id: str = "27"  # "Entertainment" category
     privacy_status: str = "private"  # "public", "private", or "unlisted"
     made_for_kids: bool = False
+    ai_generated: bool = False
 
 
 def build_youtube_service(credentials: YouTubeCredentials):
@@ -183,6 +186,7 @@ async def upload_video(
         "status": {
             "privacyStatus": metadata.privacy_status,
             "selfDeclaredMadeForKids": metadata.made_for_kids,
+            "containsSyntheticMedia": metadata.ai_generated,
         },
     }
 

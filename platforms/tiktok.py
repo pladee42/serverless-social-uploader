@@ -52,6 +52,8 @@ class TikTokVideoMetadata:
     allow_duet: bool = True
     allow_stitch: bool = True
     visibility: str = "public"  # "public", "friends", "private"
+    ai_generated: bool = False
+    privacy_status: str = "public"  # "public", "friends", "private"
 
 
 async def _inject_cookies(page: Page, session_cookie: str) -> None:
@@ -132,6 +134,102 @@ async def _fill_caption(page: Page, caption: str) -> bool:
 
     except Exception as e:
         logger.error(f"Error filling caption: {e}")
+        return False
+
+
+async def _handle_ai_disclosure(page: Page, ai_generated: bool) -> bool:
+    """
+    Toggle the AI-generated content setting if needed.
+    
+    This usually requires clicking a checkbox or switch labeled "AI-generated content".
+    """
+    if not ai_generated:
+        return True
+
+    try:
+        logger.info("Attempting to disclose AI-generated content...")
+        
+        # Possible selectors for the AI content toggle/checkbox
+        # Note: TikTok UI changes frequently, so we try multiple strategies
+        
+        # Strategy 1: Look for the text and click the associated input/switch
+        ai_text_locators = [
+            page.get_by_text("AI-generated content", exact=False),
+            page.get_by_text("Disclose AI content", exact=False),
+        ]
+        
+        for locator in ai_text_locators:
+            if await locator.count() > 0 and await locator.first.is_visible():
+                logger.info("Found AI content text, trying to find associated toggle...")
+                # Try to map to a nearby checkbox or switch
+                # This is tricky without exact DOM structure, but we can try clicking the label/text 
+                # or looking for a sibling input.
+                
+                await locator.first.click()
+                logger.info("Clicked AI content text/label")
+                return True
+
+        # Strategy 2: targeted selectors (hypothetical based on common patterns)
+        # e.g. input type checkbox inside a specific container
+        ai_checkbox = page.locator('input[type="checkbox"][name*="ai"], input[type="checkbox"][id*="ai"]')
+        if await ai_checkbox.count() > 0:
+             if not await ai_checkbox.first.is_checked():
+                 await ai_checkbox.first.check()
+                 logger.info("Checked AI content checkbox")
+             return True
+
+        logger.warning("Could not find AI content toggle - Manual disclosure might be needed")
+        return False
+
+    except Exception as e:
+        logger.error(f"Error handling AI disclosure: {e}")
+        return False
+
+
+async def _set_privacy(page: Page, privacy_status: str) -> bool:
+    """Set the privacy/visibility of the video."""
+    try:
+        # TikTok privacy options: Public, Friends, Private
+        # Map generic privacy_status to TikTok specific terms
+        target_privacy = "Public"
+        if privacy_status.lower() in ("private", "self"):
+            target_privacy = "Private"
+        elif privacy_status.lower() in ("friends", "followers"):
+            target_privacy = "Friends"
+        
+        logger.info(f"Setting privacy to: {target_privacy}")
+
+        # Locate the privacy dropdown/selector
+        # Usually a combobox or a set of radio buttons
+        
+        # Strategy 1: Dropdown text
+        privacy_trigger = page.get_by_text("Who can watch this video", exact=False)
+        if await privacy_trigger.count() > 0:
+             # Often the current selection is displayed, e.g., "Public"
+             pass
+
+        # Use Playwright's specific locators if possible
+        # Try to find the radio buttons or dropdown items
+        
+        # We'll try to click the text that matches the target privacy to select it
+        # This assumes a dropdown or radio list is visible or opened
+        
+        # Note: robust implementation requires knowing if it's a dropdown or radios.
+        # Assuming typical TikTok web upload which often has a dropdown.
+        
+        # Try to find a combobox
+        combobox = page.locator('role=combobox')
+        if await combobox.count() > 0:
+            await combobox.first.click()
+            await page.get_by_text(target_privacy, exact=True).click()
+            return True
+            
+        # Fallback: Searching for the text directly and clicking it (might be a radio label)
+        await page.get_by_text(target_privacy, exact=True).first.click()
+        return True
+
+    except Exception as e:
+        logger.warning(f"Could not set privacy to {privacy_status}: {e}")
         return False
 
 
@@ -325,6 +423,14 @@ async def upload_video(
             # Fill in caption
             if metadata.caption:
                 await _fill_caption(page, metadata.caption)
+
+            # Handle AI Disclosure
+            if metadata.ai_generated:
+                await _handle_ai_disclosure(page, True)
+
+            # Set Privacy
+            if metadata.privacy_status:
+                await _set_privacy(page, metadata.privacy_status)
 
             # Click Post button
             if not await _click_post_button(page):

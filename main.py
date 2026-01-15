@@ -87,6 +87,24 @@ class PublishRequest(BaseModel):
         None,
         description="Short caption (used by TikTok, Instagram).",
     )
+    tags: Optional[list[str]] = Field(
+        None,
+        description="List of tags (used by YouTube).",
+        examples=[["vlog", "travel", "ai"]],
+    )
+    ai_generated: bool = Field(
+        False,
+        description="Whether the video contains AI-generated content (used by YouTube, TikTok).",
+    )
+    privacy_status: str = Field(
+        "private",
+        description="Privacy status (private, unlisted, public). Default is private.",
+        examples=["private", "public"],
+    )
+    category_id: str = Field(
+        "27",
+        description="YouTube category ID (default '27' for Entertainment).",
+    )
     share_to_facebook: bool = Field(
         False,
         description="If true, Instagram uploads will cross-post to Facebook for combined view counts. "
@@ -177,6 +195,10 @@ async def upload_to_platform(
     title: Optional[str],
     description: Optional[str],
     caption: Optional[str],
+    tags: Optional[list[str]],
+    ai_generated: bool,
+    privacy_status: str,
+    category_id: str,
     dry_run: bool = False,
     share_to_facebook: bool = False,
 ) -> dict:
@@ -221,7 +243,10 @@ async def upload_to_platform(
             metadata = YouTubeVideoMetadata(
                 title=title or "Untitled Video",
                 description=description or "",
-                privacy_status="private",  # Default to private for safety
+                tags=tags,
+                category_id=category_id,
+                privacy_status=privacy_status,
+                ai_generated=ai_generated,
             )
 
             # Upload to YouTube
@@ -241,6 +266,8 @@ async def upload_to_platform(
             credentials = TikTokCredentials(session_cookie=session_cookie)
             metadata = TikTokVideoMetadata(
                 caption=caption or title or "",
+                ai_generated=ai_generated,
+                privacy_status=privacy_status,
             )
 
             # Upload to TikTok using Playwright
@@ -368,6 +395,10 @@ async def process_publish_request(
                 title=request.title,
                 description=request.description,
                 caption=request.caption,
+                tags=request.tags,
+                ai_generated=request.ai_generated,
+                privacy_status=request.privacy_status,
+                category_id=request.category_id,
                 dry_run=dry_run,
                 share_to_facebook=request.share_to_facebook if platform == Platform.INSTAGRAM else False,
             )
