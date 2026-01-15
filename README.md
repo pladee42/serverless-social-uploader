@@ -2,8 +2,9 @@
 
 [![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-00a393.svg)](https://fastapi.tiangolo.com)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Cloud Run](https://img.shields.io/badge/Google%20Cloud-Run-4285F4.svg)](https://cloud.google.com/run)
+[![Deploy](https://github.com/pladee42/serverless-social-uploader/actions/workflows/deploy.yml/badge.svg)](https://github.com/pladee42/serverless-social-uploader/actions/workflows/deploy.yml)
 
 A **serverless FastAPI** application for uploading videos to multiple social media platforms (YouTube, TikTok, Instagram, Facebook) from a single API call.
 
@@ -16,10 +17,11 @@ A **serverless FastAPI** application for uploading videos to multiple social med
 - **🎯 Single API Endpoint** — Upload to multiple platforms with one `POST /publish` request
 - **🔐 Config-Driven Secrets** — Dynamic secret resolution using `{CHANNEL_ID}_{PLATFORM}_{KEY}` pattern
 - **📺 YouTube** — OAuth2 Refresh Token flow with resumable uploads
-- **🎵 TikTok** — Browser automation via Playwright (coming soon)
-- **📸 Meta** — Instagram & Facebook via Graph API (coming soon)
+- **🎵 TikTok** — Browser automation via Playwright
+- **📸 Meta** — Instagram & Facebook via Graph API v24.0
 - **☁️ Serverless** — Runs on Google Cloud Run with scale-to-zero
 - **🆓 Zero Cost** — Designed for GCP Free Tier
+- **🚀 CI/CD** — Auto-deploy via GitHub Actions
 
 ---
 
@@ -56,35 +58,40 @@ A **serverless FastAPI** application for uploading videos to multiple social med
 - Google Cloud account with:
   - Cloud Run API enabled
   - Secret Manager API enabled
-- Docker (for deployment)
+  - Artifact Registry API enabled
+- Docker (for local container testing)
 
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/yourusername/serverless-social-uploader.git
+git clone https://github.com/pladee42/serverless-social-uploader.git
 cd serverless-social-uploader
 
-# Create conda environment
-conda create -n social-mng python=3.14 -c conda-forge
-conda activate social-mng
+# Create environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
 ```
 
-### 2. Set Up YouTube Credentials
+### 2. Set Up Platform Credentials
 
 ```bash
-# Download OAuth2 credentials from Google Cloud Console
-# Save as client_secret.json in the project root
-
-# Generate and save tokens to Secret Manager
+# YouTube - OAuth2 tokens
 python tools/get_youtube_token.py --save --channel-id YOUR_CHANNEL --project YOUR_PROJECT
+
+# TikTok - Session cookie
+python tools/get_tiktok_cookie.py --save --channel-id YOUR_CHANNEL --project YOUR_PROJECT
+
+# Meta (Facebook/Instagram) - Access tokens
+python tools/get_meta_token.py --save --channel-id YOUR_CHANNEL --project YOUR_PROJECT
 ```
 
 ### 3. Run Locally
 
 ```bash
+export GCP_PROJECT=your-project-id
 uvicorn main:app --reload --port 8080
 ```
 
@@ -95,15 +102,15 @@ uvicorn main:app --reload --port 8080
 curl http://localhost:8080/
 
 # Validate secrets exist
-curl "http://localhost:8080/validate/timeline_b?platforms=youtube"
+curl "http://localhost:8080/validate/YOUR_CHANNEL?platforms=youtube&platforms=tiktok"
 
 # Publish video (dry run)
-curl -X POST http://localhost:8080/publish?dry_run=true \
+curl -X POST "http://localhost:8080/publish?dry_run=true" \
   -H "Content-Type: application/json" \
   -d '{
-    "channel_id": "timeline_b",
+    "channel_id": "YOUR_CHANNEL",
     "video_url": "https://storage.googleapis.com/your-bucket/video.mp4",
-    "platforms": ["youtube"],
+    "platforms": ["youtube", "tiktok", "facebook", "instagram"],
     "title": "My Video Title",
     "description": "Video description"
   }'
@@ -115,17 +122,22 @@ curl -X POST http://localhost:8080/publish?dry_run=true \
 
 ```
 serverless-social-uploader/
-├── main.py                    # FastAPI application
-├── Dockerfile                 # Container with Playwright support
-├── requirements.txt           # Python dependencies
+├── main.py                       # FastAPI application
+├── Dockerfile                    # Container with Playwright support
+├── requirements.txt              # Python dependencies
 ├── platforms/
-│   ├── youtube.py            # YouTube uploader (Refresh Token)
-│   ├── tiktok.py             # TikTok uploader (Browser) [WIP]
-│   └── meta.py               # Facebook/Instagram [WIP]
+│   ├── youtube.py               # YouTube uploader (OAuth2 Refresh Token)
+│   ├── tiktok.py                # TikTok uploader (Playwright Browser)
+│   └── meta.py                  # Facebook/Instagram (Graph API)
 ├── utils/
-│   └── secrets.py            # Dynamic secret resolution
-└── tools/
-    └── get_youtube_token.py  # Local OAuth2 token generator
+│   └── secrets.py               # Dynamic secret resolution
+├── tools/
+│   ├── get_youtube_token.py     # YouTube OAuth2 token generator
+│   ├── get_tiktok_cookie.py     # TikTok session cookie helper
+│   └── get_meta_token.py        # Meta access token helper
+└── .github/
+    └── workflows/
+        └── deploy.yml           # GitHub Actions CI/CD
 ```
 
 ---
@@ -143,22 +155,44 @@ serverless-social-uploader/
 
 All secrets follow the pattern: `{CHANNEL_ID}_{PLATFORM}_{KEY}`
 
-**Example for channel "timeline_b":**
-- `TIMELINE_B_YOUTUBE_CLIENT_ID`
-- `TIMELINE_B_YOUTUBE_CLIENT_SECRET`
-- `TIMELINE_B_YOUTUBE_REFRESH_TOKEN`
-- `TIMELINE_B_TIKTOK_SESSION_COOKIE`
+**Example for channel "my_channel":**
+- `MY_CHANNEL_YOUTUBE_CLIENT_ID`
+- `MY_CHANNEL_YOUTUBE_CLIENT_SECRET`
+- `MY_CHANNEL_YOUTUBE_REFRESH_TOKEN`
+- `MY_CHANNEL_TIKTOK_SESSION_COOKIE`
+- `MY_CHANNEL_FACEBOOK_ACCESS_TOKEN`
+- `MY_CHANNEL_FACEBOOK_PAGE_ID`
+- `MY_CHANNEL_INSTAGRAM_ACCESS_TOKEN`
+- `MY_CHANNEL_INSTAGRAM_USER_ID`
 
 ---
 
-## 🐳 Deployment to Cloud Run
+## 🚀 Deployment
+
+### Option 1: GitHub Actions (Recommended)
+
+1. Fork this repository
+2. Add secrets in **Settings → Secrets and variables → Actions**:
+   - `GCP_SA_KEY` — Service account JSON key
+3. Add variables:
+   - `GCP_PROJECT` — Your GCP project ID
+   - `GCP_REGION` — Deployment region (e.g., `us-central1`)
+4. Push to `main` branch — auto-deploys!
+
+**Required GCP IAM Roles for Service Account:**
+- `roles/run.admin`
+- `roles/iam.serviceAccountUser`
+- `roles/cloudbuild.builds.editor`
+- `roles/storage.admin`
+- `roles/artifactregistry.admin`
+- `roles/serviceusage.serviceUsageConsumer`
+
+### Option 2: Manual Deploy
 
 ```bash
-# Authenticate with GCP
 gcloud auth login
 gcloud config set project YOUR_PROJECT_ID
 
-# Build and deploy
 gcloud run deploy social-uploader \
   --source . \
   --region us-central1 \
@@ -183,7 +217,7 @@ Health check endpoint.
 Validate that secrets exist for a channel.
 
 **Query Parameters:**
-- `platforms` — List of platforms to validate (default: `["youtube", "tiktok"]`)
+- `platforms` — List of platforms to validate
 
 ### `POST /publish`
 Upload video to multiple platforms.
@@ -193,7 +227,7 @@ Upload video to multiple platforms.
 {
   "channel_id": "string",
   "video_url": "string",
-  "platforms": ["youtube", "tiktok"],
+  "platforms": ["youtube", "tiktok", "facebook", "instagram"],
   "title": "string",
   "description": "string",
   "caption": "string"
@@ -221,9 +255,15 @@ Once running, visit:
 
 ---
 
+## 🤝 Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+---
+
 ## 📄 License
 
-MIT License — feel free to use this for your own projects!
+MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
