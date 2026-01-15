@@ -1,5 +1,5 @@
 # Base image with Playwright and Chromium
-FROM mcr.microsoft.com/playwright/python:v1.57.0-jammy
+FROM mcr.microsoft.com/playwright/python:v1.57.0-noble
 
 # Set working directory
 WORKDIR /app
