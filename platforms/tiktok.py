@@ -31,6 +31,7 @@ TIKTOK_UPLOAD_URL = "https://www.tiktok.com/upload"
 TIKTOK_CREATOR_URL = "https://www.tiktok.com/creator"
 
 # Timeouts
+NAVIGATION_TIMEOUT = 120000  # 2 minutes for navigation (TikTok can be slow)
 DEFAULT_TIMEOUT = 60000  # 60 seconds
 UPLOAD_TIMEOUT = 300000  # 5 minutes for video processing
 
@@ -233,27 +234,53 @@ async def upload_video(
                     "--disable-blink-features=AutomationControlled",
                     "--disable-dev-shm-usage",
                     "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-gpu",
+                    "--disable-web-security",
+                    "--disable-features=IsolateOrigins,site-per-process",
                 ],
             )
 
-            # Create context with realistic viewport
+            # Create context with realistic viewport and locale
             context = await browser.new_context(
-                viewport={"width": 1280, "height": 720},
+                viewport={"width": 1920, "height": 1080},
+                locale="en-US",
+                timezone_id="America/Los_Angeles",
                 user_agent=(
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                     "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 Safari/537.36"
+                    "Chrome/121.0.0.0 Safari/537.36"
                 ),
             )
+            
+            # Set default timeout for all operations
+            context.set_default_timeout(DEFAULT_TIMEOUT)
 
             page = await context.new_page()
 
             # Inject session cookie
             await _inject_cookies(page, credentials.session_cookie)
 
-            # Navigate to upload page
+            # Navigate to upload page with longer timeout and less strict wait
             logger.info(f"Navigating to {TIKTOK_UPLOAD_URL}")
-            await page.goto(TIKTOK_UPLOAD_URL, wait_until="networkidle")
+            try:
+                # Use domcontentloaded instead of networkidle (TikTok keeps loading)
+                await page.goto(
+                    TIKTOK_UPLOAD_URL,
+                    wait_until="domcontentloaded",
+                    timeout=NAVIGATION_TIMEOUT,
+                )
+                # Give the page a moment to stabilize
+                await asyncio.sleep(3)
+            except PlaywrightTimeout:
+                logger.error("Navigation to TikTok timed out - TikTok may be blocking the request")
+                if screenshot_on_error:
+                    await page.screenshot(path="/tmp/tiktok_error_navigation.png")
+                return {
+                    "platform": "tiktok",
+                    "status": "error",
+                    "message": "Navigation timeout - TikTok may be blocking automated access",
+                }
 
             # Check if we're logged in (should redirect to creator center)
             current_url = page.url
