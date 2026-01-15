@@ -24,6 +24,11 @@ from platforms.youtube import (
     YouTubeCredentials,
     VideoMetadata as YouTubeVideoMetadata,
 )
+from platforms.tiktok import (
+    upload_video as tiktok_upload_video,
+    TikTokCredentials,
+    TikTokVideoMetadata,
+)
 
 # Configure logging
 logging.basicConfig(
@@ -217,8 +222,14 @@ async def upload_to_platform(
             if dry_run:
                 return {"platform": platform.value, "status": "validated", "message": "Secrets found"}
 
-            # TODO: Import and call platforms.tiktok.upload_video
-            return {"platform": platform.value, "status": "pending", "message": "TikTok uploader not yet implemented"}
+            # Build credentials and metadata
+            credentials = TikTokCredentials(session_cookie=session_cookie)
+            metadata = TikTokVideoMetadata(
+                caption=caption or title or "",
+            )
+
+            # Upload to TikTok using Playwright
+            return await tiktok_upload_video(video_path, credentials, metadata)
 
         except Exception as e:
             return {"platform": platform.value, "status": "error", "message": str(e)}
