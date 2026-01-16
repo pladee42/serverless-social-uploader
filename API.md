@@ -31,7 +31,7 @@ Initiates a video upload to the specified social media platforms. The service do
 | `ai_generated`| boolean| No | Flags content as AI-generated (default: `false`). |
 | `privacy_status`| string | No | `"private"`, `"unlisted"`, or `"public"` (default: `"private"`). |
 | `category_id` | string | No | YouTube category ID (default: `"27"` for Entertainment). |
-| `share_to_facebook` | boolean | No | If `true` and uploading to Instagram, enables cross-posting to Facebook (skips separate FB upload). |
+| `share_to_facebook` | boolean | No | **DEPRECATED**. Instagram API does not support cross-posting. Include both `instagram` and `facebook` in platforms to post to both. |
 
 **Example Request:**
 
@@ -39,14 +39,13 @@ Initiates a video upload to the specified social media platforms. The service do
 {
   "channel_id": "timeline_b",
   "video_url": "https://storage.googleapis.com/my-bucket/video.mp4",
-  "platforms": ["youtube", "tiktok", "instagram"],
+  "platforms": ["youtube", "tiktok", "instagram", "facebook"],
   "title": "What if Napoleon won? #history",
   "description": "An alternate history deep dive.\n\n#history #documentary",
   "caption": "Napoleon's victory? 🤯 #althistory",
   "tags": ["history", "education", "napoleon"],
   "ai_generated": true,
-  "privacy_status": "public",
-  "share_to_facebook": true
+  "privacy_status": "public"
 }
 ```
 

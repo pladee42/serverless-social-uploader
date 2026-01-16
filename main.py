@@ -107,8 +107,8 @@ class PublishRequest(BaseModel):
     )
     share_to_facebook: bool = Field(
         False,
-        description="If true, Instagram uploads will cross-post to Facebook for combined view counts. "
-        "When enabled, Facebook in platforms list will be skipped (handled via cross-post).",
+        description="DEPRECATED: Instagram API does not support cross-posting to Facebook. "
+        "If you need to post to both, include both 'instagram' and 'facebook' in the platforms list.",
     )
 
 
@@ -359,18 +359,10 @@ async def process_publish_request(
         video_filename = parsed_url.path.split("/")[-1] or "video.mp4"
         local_video_path = os.path.join(tmp_dir, video_filename)
 
-        # Determine which platforms to actually upload to
         platforms_to_upload = list(request.platforms)
         
-        # If share_to_facebook is enabled and Instagram is in the list,
-        # skip separate Facebook upload (it will be handled via cross-post)
-        cross_posting_enabled = (
-            request.share_to_facebook 
-            and Platform.INSTAGRAM in request.platforms
-        )
-        if cross_posting_enabled and Platform.FACEBOOK in platforms_to_upload:
-            platforms_to_upload.remove(Platform.FACEBOOK)
-            logger.info(f"🔗 [{request.channel_id}] Cross-posting enabled: Facebook will be handled via Instagram")
+        # Note: share_to_facebook is deprecated. Instagram API does not support cross-posting.
+        # Both platforms must be uploaded to separately.
 
         platforms_str = ", ".join(p.value for p in platforms_to_upload)
         logger.info(f"🚀 [{request.channel_id}] Starting upload to {len(platforms_to_upload)} platforms: {platforms_str}")
